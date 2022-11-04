@@ -1,4 +1,4 @@
-# Graph Matching RnD
+# Graph Matching
 
 ## Models Used
 1. SimGNN:
