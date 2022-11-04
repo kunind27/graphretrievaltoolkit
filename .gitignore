@@ -56,6 +56,13 @@ coverage.xml
 .pytest_cache/
 cover/
 
+# TODO: Better way of specifying these
+*/**/*.pyc
+*/**/**/*.pyc
+*/**/**/**/*.pyc
+*/**/**/**/**/*.pyc
+data
+
 # Translations
 *.mo
 *.pot
