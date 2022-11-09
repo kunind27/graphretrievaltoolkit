@@ -1,3 +1,5 @@
+from typing import Optional
+
 import torch
 from torch.functional import Tensor
 
@@ -16,11 +18,11 @@ class GlobalContextAttention(torch.nn.Module):
         activation: The Activation Function to be used for the Attention Layer
         a: Slope of the -ve part if the activation is Leaky ReLU
     """
-    def __init__(self, input_dim, activation: str = "tanh", a = 0.1):
+    def __init__(self, input_dim, activation: str = "tanh", activation_slope: Optional[float] = None):
         super(GlobalContextAttention, self).__init__()
         self.input_dim = input_dim
         self.activation = activation 
-        self.a = a 
+        self.activation_slope = activation_slope
         
         self.initialize_parameters()
 
@@ -35,7 +37,11 @@ class GlobalContextAttention(torch.nn.Module):
         self.weight_matrix = torch.nn.Parameter(torch.Tensor(self.input_dim, self.input_dim))
 
         if self.activation == "leaky_relu" or self.activation == "relu":
-            torch.nn.init.kaiming_normal_(self.weight_matrix, a = self.a, nonlinearity = self.activation)
+            if self.activation_slope is None or self.activation_slope <= 0:
+                raise ValueError(f"Activation function slope parameter needs to be a positive \
+                                value. {} is invalid".format(self.activation_slope))
+            
+            torch.nn.init.kaiming_normal_(self.weight_matrix, a = self.activation_slope, nonlinearity = self.activation)
         elif self.activation == "tanh" or self.activation == "sigmoid":
             torch.nn.init.xavier_normal_(self.weight_matrix)
         else:
