@@ -1,11 +1,13 @@
+from typing import Optional, List
+
 import torch
 from torch import Tensor
-from torch_geometric.data import Batch
 from torch.nn.utils.rnn import pad_sequence
 import torch.nn.functional
+from torch_geometric.nn.conv import GCNConv, SAGEConv, GATConv
 
-from ..modules.attention import AttentionLayer
-from ..modules.encoder import GraphEncoder
+from ..modules.attention import GlobalContextAttention
+from ..modules.ntn import NeuralTensorNetwork
 
 # TODO: 
 
@@ -24,83 +26,105 @@ from ..modules.encoder import GraphEncoder
 # 6. Figure out how different Conv mechanisms work, assumed same for now.
 
 class SimGNN(torch.nn.Module):
-    def __init__(self, input_dim: int, tensor_neurons: int = 16, filters: list = [64, 32, 16],
-                 bottle_neck: int = 16, hist_bins: int = 0, conv: str = "gcn", activation = "tanh"):
+    def __init__(self, input_dim: int, ntn_slices: int = 16, filters: list = [64, 32, 16],
+                 mlp_neurons: List[int] = [32,16,8,4], hist_bins: int = 16, conv: str = "gcn", 
+                 activation = "tanh", include_histogram = False):
+        # TODO: give a better name to the include_histogram flag 
         super(SimGNN, self).__init__()
         self.input_dim = input_dim
         self.conv_type = conv
-        self.conv_filter_list = filters
+        self.filters = filters
         self.activation = activation
-        self.bottle_neck_neurons = bottle_neck
-        self.setHyperParams(tensor_neurons, hist_bins)
-        self.setupLayers()
-
-        # NTN capturing graph-graph interaction
-        # Output is R^k vector at different scales k (tensor_neurons)
-        self.ntn_a = torch.nn.Bilinear(self.conv_filter_list[2], self.conv_filter_list[2], self.tensor_neurons, bias = False)
-        torch.nn.init.xavier_uniform_(self.ntn_a.weight)
-        self.ntn_b = torch.nn.Linear(2 * self.conv_filter_list[2], self.tensor_neurons, bias = False)
-        torch.nn.init.xavier_uniform_(self.ntn_b.weight)
-        self.ntn_bias = torch.nn.Parameter(torch.Tensor(self.tensor_neurons, 1))
-        # torch.nn.init.xavier_uniform_(self.ntn_bias.weight)
-
-        # Feature Count for histogram business
-        feature_count = self.tensor_neurons + self.bins
-        # for now only one bottle neck layer is implemented (therefore FCN has only one hidden layer)
-        self.fc1 = torch.nn.Linear(feature_count, self.bottle_neck_neurons)
-        self.fc2 = torch.nn.Linear(self.bottle_neck_neurons, 1) 
+        self.mlp_neurons = mlp_neurons
+        
+        # Hyperparameters
+        self.ntn_slices = ntn_slices
+        self.hist_bins = hist_bins
     
-    def setHyperParams(self, k: int, bins: int):
-        # Output Dimension of the NTN
-        self.tensor_neurons = k
-        # No. of Bins to be used for the Histogram 
-        self.bins = bins
+        self.setup_layers()
+        self.reset_parameters()
 
-    def setupLayers(self):
-        self.conv_layer = GraphEncoder(self.input_dim, None, filters = self.conv_filter_list,
-                                        conv_type = self.conv_type, name = "simgnn")
-        self.attention_layer = AttentionLayer(self.input_dim, type = 'simgnn', activation = self.activation)
+    def setup_layers(self):
+        # XXX: Should MLP and GNNs be defined as separate classes to avoid clutter?
+
+        # Convolutional GNN layer
+        self.convs = torch.nn.ModuleList()
+        conv_methods = {"gcn": GCNConv, "sage": SAGEConv, "gat": GATConv}
+        _conv = conv_methods[self.conv_type]
+        num_layers = len(self.filters)
+        self._in = self.input_dim
+        for i in range(num_layers):
+            self._out = self.filters[i]
+            self.convs.append(_conv(in_channels=self._in, out_channels=self._out))
+            self._in = self._out
+
+        # Global self attention layer
+        self.attention_layer = GlobalContextAttention(self.input_dim, activation = self.activation)
+        # Neural Tensor Network module
+        self.ntn_layer = NeuralTensorNetwork(self.input_dim, slices = self.ntn_slices, activation = self.activation)
         
-    def forward(self, x_s: Tensor, edge_index_s: Tensor, x_t: Tensor, edge_index_t: Tensor,
-                graph_sizes: list, conv_dropout: int = 0, isolate = None):
+        # MLP layer
+        self.mlp = torch.nn.ModuleList()
+        num_layers = len(mlp_neurons)
+        if self.include_histogram:
+            self._in = self.ntn_slices + self.hist_bins
+        else: 
+            self._in = self.ntn_slices
+        for i in range(num_layers):
+            self._out = mlp_neurons[i]
+            self.mlp.append(torch.nn.Linear(self._in, self._out))
+            self._in = self._out
+        self.scoring_layer = torch.nn.Linear(mlp_neurons[-1], 1)
+
+    def reset_parameters(self):
+        for conv in self.convs:
+            conv.reset_parameters()
+        self.attention_layer.reset_parameters()
+        self.ntn_layer.reset_parameters()
+        for lin in self.mlp:
+            lin.reset_parameters()
+        
+    def forward(self, x_i: Tensor, edge_index_i: Tensor, x_j: Tensor, edge_index_j: Tensor,
+                conv_dropout: int = 0):
         """
-        Forward pass with query and corpus graphs.
-        :param data: A Batch Containing a Pair of Graphs.
-        :return score: Similarity score.
         """
-        source_graph, target_graph = {}, {}
-        source_graph["x"], source_graph["edge_index"] = x_s, edge_index_s
-        target_graph["x"], target_graph["edge_index"] = x_t, edge_index_t
-        a, b = graph_sizes[0].item(), graph_sizes[1].item()
-        
-        source_graph["x"] = self.conv_layer(source_graph["x"], target_graph["edge_index"], dropout = conv_dropout)
-        target_graph["x"] = self.conv_layer(target_graph["x"], target_graph["edge_index"], dropout = conv_dropout)
-        
-        source_g_emb = self.attention_layer(source_graph["x"])
-        target_g_emb = self.attention_layer(target_graph["x"])
+        # Strategy One: Graph-Level Embedding Interaction
+        for filter_idx, conv in enumerate(self.convs):
+            x_i = conv(x_i, edge_index_i)
+            x_j = conv(x_j, edge_index_j)
+            
+            if filter_idx == len(self.convs) - 1:
+                break
+            x_i = torch.nn.functional.relu(x_i)
+            x_i = torch.nn.functional.dropout(x_i, p = conv_dropout, training = self.training)
+            x_j = torch.nn.functional.relu(x_j)
+            x_j = torch.nn.functional.dropout(x_j, p = conv_dropout, training = self.training)
 
-        if isolate == "att":
-            return source_g_emb, target_g_emb
-        elif isolate is not None:
-            raise ValueError("Invalid value of argument:", isolate)
+        h_i = self.attention_layer(x_i)
+        h_j = self.attention_layer(x_j)
+
+        interaction = self.ntn_layer(h_i, h_j) 
         
-        scores = torch.nn.functional.relu(self.ntn_a(source_g_emb, target_g_emb) + 
-                                        self.ntn_b(torch.cat((source_g_emb, target_g_emb), dim=-1)) + 
-                                        self.ntn_bias.squeeze())
-
-        # Concatenate histogram of pairwise node-node interaction scores if specified
-        # if self.bins:
-        #     query_node_emb, corpus_node_emb = pad_sequence([g.x for g in query_batch.to_data_list()], batch_first = True), \
-        #                                         pad_sequence([c.x for c in corpus_batch.to_data_list()], batch_first = True)
-        #     h = torch.histc(query_node_emb@corpus_node_emb.permute(0,2,1),bins=self.bins)
-        #     h = torch.div(h, torch.sum(h))
-
-        #     scores = torch.cat((scores, h), dim = 1)
-
-        scores = torch.nn.functional.relu(self.fc1(scores))
-        score = torch.sigmoid(self.fc2(scores))
-        preds = []
-        preds.append(score)
-        p = torch.stack(preds).squeeze()
+        # Strategy Two: Pairwise Node Comparison
+        if include_histogram:
+            sim_matrix = torch.matmul(h_i, h_j.transpose(-1,-2)).detach()
+            sim_matrix = torch.sigmoid(sim_matrix)
+            # XXX: is this if statement necessary? Can writing the histogram operation as a single 
+            # tensor operation not accomodate batching?
+            if len(sim_matrix.shape) == 3:
+                scores = sim_matrix.view(sim_matrix.shape[0], -1, 1)
+                hist = torch.cat([torch.histc(x, bins = self.hist_bins).unsqueeze(0) for x in scores], dim=0)
+            else:
+                scores = sim_matrix.view(-1, 1)
+                hist = torch.histc(scores, bins = self.hist_bins)
+            hist = hist.unsqueeze(-1)
+            interaction = torch.cat((interaction, hist), dim = -2)
         
-        return p
+        # Final interaction score prediction
+        for layer_idx, lin in enumerate(self.mlp):
+            interaction = lin(interaction)
+            interaction = torch.nn.functional.relu(interaction)
+        # XXX: torch.sigmoid used for normalization, appropriate?
+        interaction = torch.sigmoid(self.scoring_layer(interaction))
+        
+        return interaction

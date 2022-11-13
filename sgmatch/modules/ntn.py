@@ -25,6 +25,7 @@ class NeuralTensorNetwork(torch.nn.Module):
         self.activation = activation
 
         self.initialize_parameters()
+        self.reset_parameters()
 
     def initialize_parameters(self):
         # XXX: Will arranging weight tensor as (k, d, d) cause problems in batching at dim 0?
@@ -32,6 +33,7 @@ class NeuralTensorNetwork(torch.nn.Module):
         self.weight_matrix = torch.nn.Parameter(torch.Tensor(self.slices, 2 * self.input_dim))
         self.bias = torch.nn.Parameter(torch.Tensor(self.slices, 1))
     
+    def reset_parameters(self):
         torch.nn.init.xavier_uniform_(self.weight_tensor)
         torch.nn.init.xavier_uniform_(self.weight_matrix)
         torch.nn.init.xavier_uniform_(self.bias)

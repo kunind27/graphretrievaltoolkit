@@ -25,6 +25,7 @@ class GlobalContextAttention(torch.nn.Module):
         self.activation_slope = activation_slope
         
         self.initialize_parameters()
+        self.reset_parameters()
 
     def initialize_parameters(self):
         r"""
@@ -32,10 +33,11 @@ class GlobalContextAttention(torch.nn.Module):
         If ReLU/Leaky ReLU : He (Kaiming) Initialization
         If tanh/sigmoid : Xavier Initialization
 
-        TODO: Needs justification/reference
+        TODO: Initialisation methods need justification/reference
         """
         self.weight_matrix = torch.nn.Parameter(torch.Tensor(self.input_dim, self.input_dim))
 
+    def reset_parameters(self):
         if self.activation == "leaky_relu" or self.activation == "relu":
             if self.activation_slope is None or self.activation_slope <= 0:
                 raise ValueError(f"Activation function slope parameter needs to be a positive \
@@ -63,14 +65,14 @@ class GlobalContextAttention(torch.nn.Module):
         activations = {"tanh": torch.nn.functional.tanh, "leaky_relu": torch.nn.functional.leaky_relu,
                         "relu": torch.nn.functional.relu, "sigmoid": torch.nn.functional.sigmoid}
 
-        # Generating the global context
+        # Generating the global context vector
         global_context = torch.mean(torch.matmul(x, self.weight_matrix), dim = 0)
 
         # Applying the Non-Linearity over global context vector
         _activation = activations[self.activation]
         global_context = _activation(global_context)
 
-        # Computing attention weights and weight-aggregating node embeddings
+        # Computing attention weights and att-weight-aggregating node embeddings
         att_weights = torch.sigmoid(torch.matmul(x, global_context.view(-1, 1)))
         representation = torch.sum(x * att_weights, dim = 0)
         
