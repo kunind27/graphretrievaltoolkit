@@ -61,9 +61,11 @@ class GlobalContextAttention(torch.nn.Module):
         """
         if x.shape[1] != self.input_dim:
             raise RuntimeError("dim 1 of input tensor does not match dimension of weight matrix")
-        
+        # XXX: Have these dicts stored in separate files?
         activations = {"tanh": torch.nn.functional.tanh, "leaky_relu": torch.nn.functional.leaky_relu,
                         "relu": torch.nn.functional.relu, "sigmoid": torch.nn.functional.sigmoid}
+        if self.activation not in activations.keys():
+            raise ValueError(f"Invalid activation function specified: {self.activation}")
 
         # Generating the global context vector
         global_context = torch.mean(torch.matmul(x, self.weight_matrix), dim = 0)
@@ -77,3 +79,32 @@ class GlobalContextAttention(torch.nn.Module):
         representation = torch.sum(x * att_weights, dim = 0)
         
         return representation
+
+class CrossGraphAttention(torch.nn.Module):
+    r"""
+    """
+    def __init__(self, similarity_metric: str = "euclidean"):
+        super(CrossGraphAttention, self).__init__()
+        self.similarity = similarity_metric
+
+    def forward(self, h_i: Tensor, h_j: Tensor):
+        r"""
+        """
+        sim_dict = {"euclidean": torch.cdist, "cosine": torch.nn.functional.cosine_similarity}
+        # XXX: Have these dicts stored in separate files?
+        if self.similarity not in sim_dict.keys():
+            raise ValueError(f"Invalid similarity metric specified: {self.similarity}")
+        self._sim = sim_dict[self.similarity]
+
+        # Attention weight calculation
+        a = self._sim(h_i, h_j) # [N, M]
+        a_i = torch.softmax(a, dim=0) # att. weights for aggregating nodes in, j->i
+        h_i -= torch.matmul(a_i, h_j)
+
+        a_j = torch.softmax(a, dim=1) # att. weights for nodes in graph h_j, i->j
+        h_j -= torch.matmul(a_j.transpose(-1,0), h_i)
+
+        return h_i, h_j
+
+
+        
