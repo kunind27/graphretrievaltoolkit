@@ -1,3 +1,6 @@
+from typing import Optional, List
+import warnings
+
 import torch
 from torch_geometric.nn.conv import GCNConv, SAGEConv, GATConv
 from torch_geometric.data import Data, Batch
@@ -7,15 +10,13 @@ from torch.nn.utils.rnn import pad_sequence
 
 # 1. Encoder should be telling the user what model's encoder it is using
 # 2. Till now, simgnn graphsim and gmn are included here
-# 3. Check what the forward pass is outputting for simgnn
 
 class GraphEncoder(torch.nn.Module):
-    """Encoder module that projects node and edge features to some embeddings."""
+    """Encoder module that projects node and edge features to embedding space."""
     def __init__(self, input_node_dim, input_edge_dim, node_hidden_sizes = None, 
                  edge_hidden_sizes = None, filters: list = [64, 32, 16], conv_type: str = 'gcn',
                  name: str ='gmn'):
-        """Constructor.
-
+        """
         Args:
           node_hidden_sizes: if provided should be a list of ints, hidden sizes of
             node encoder network, the last element is the size of the node outputs.
@@ -119,3 +120,55 @@ class GraphEncoder(torch.nn.Module):
             features = self.conv3(features, edge_features)
 
             return features
+
+class MLPEncoder(torch.nn.Module):
+    r"""
+    """
+    def __init__(self, node_feature_dim: int, node_hidden_sizes: List[int], 
+                edge_feature_dim: Optional[int] = None, edge_hidden_sizes: Optional[List[int]] = None):
+        super(MLPEncoder, self).__init__()
+        self.node_feature_dim = node_feature_dim
+        self.edge_feature_dim = edge_feature_dim
+        self.node_hidden_sizes = node_hidden_sizes
+        self.edge_hidden_sizes = edge_hidden_sizes
+        self.setup_layers()
+
+    def setup_layers(self):
+        # TODO: Include error handling for empty MLP layer size lists
+        edge_err = (edge_feature_dim is not None) ^ (edge_hidden_sizes is not None)
+        if edge_err:
+            raise RuntimeError("One of edge_feature_dim or edge_hidden_sizes not specified")
+
+        self.mlp_node = torch.nn.ModuleList()
+        num_layers = len(self.node_hidden_sizes)
+        self._in = self.node_feature_dim
+        for i in range(num_layers):
+            self._out = self.node_hidden_sizes[i]
+            self.mlp_node.append(torch.nn.Linear(self._in, self._out))
+            self._in = self._out
+        
+        if edge_feature_dim is not None:
+            self.mlp_edge = torch.nn.ModuleList()
+            num_layers = len(self.edge_hidden_sizes)
+            self._in = self.edge_feature_dim
+            for i in range(num_layers):
+                self._out = self.edge_hidden_sizes[i]
+                self.mlp_edge.append(torch.nn.Linear(self._in, self._out))
+                self._in = self._out
+            
+    def forward(self, node_features: Tensor, edge_features: Optional[Tensor] = None):
+        if edge_features is not None and edge_feature_dim is None:
+            raise RuntimeError("Dimension of edge features not specified while initialising model, \
+                                but edge features provided in forward call")
+        
+        node_features = self.mlp_node(node_features)
+        if edge_features is not None:
+            edge_features = self.mlp_edge(edge_features)
+            return node_features, edge_features
+        return node_features
+
+    def __repr__(self):
+        return ('{}(node_feature_dim={}, edge_feature_dim={}, node_hidden_sizes={}, \
+                    edge_hidden_sizes={})').format(self.__class__.__name__, self.node_feature_dim,
+                                                   self.edge_feature_dim, self.node_hidden_sizes,  
+                                                   self.edge_hidden_sizes)
