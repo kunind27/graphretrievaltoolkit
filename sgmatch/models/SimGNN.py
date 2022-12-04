@@ -1,7 +1,7 @@
 from typing import Optional, List
 
 import torch
-from torch import Tensor
+from torch.functional import Tensor
 from torch.nn.utils.rnn import pad_sequence
 import torch.nn.functional
 from torch_geometric.nn.conv import GCNConv, SAGEConv, GATConv
@@ -9,23 +9,13 @@ from torch_geometric.nn.conv import GCNConv, SAGEConv, GATConv
 from ..modules.attention import GlobalContextAttention
 from ..modules.ntn import NeuralTensorNetwork
 
-# TODO: 
-
-# High Priority
-# 1. Revise bottleneck business, K and hist length are both 16 hence more layers needed
-# 2. Can user be flexible with number of Conv layers for desirable feature extraction? 
-# 3. Ask Indra about summation technique used for passing features to attention layer weights
-# 4. Start including flags for attention mechanisms and encoder techniques
-# 5. Should GNN have different activations? (ReLU is in the paper)
-# 6. Include GIN and GAT Conv mechanisms
-# 7. Figure out if node encoding can be done internally (will let us use different kinds of
-#    encoding mechanisms like one-hot, adj-list ???)
-# 8. Does isolating an attention mechanism require returning for both query and corpus graphs?
-
-# Low Priority
-# 6. Figure out how different Conv mechanisms work, assumed same for now.
-
 class SimGNN(torch.nn.Module):
+    r"""
+    End to end implementation of SimGNN from the `"SimGNN: A Neural Network Approach
+    to Fast Graph Similarity Computation" <https://arxiv.org/pdf/1808.05689.pdf>`_ paper.
+    
+    TODO: Provide description of implementation and differences from paper if any
+    """
     def __init__(self, input_dim: int, ntn_slices: int = 16, filters: list = [64, 32, 16],
                  mlp_neurons: List[int] = [32,16,8,4], hist_bins: int = 16, conv: str = "gcn", 
                  activation = "tanh", include_histogram = False):
@@ -86,7 +76,7 @@ class SimGNN(torch.nn.Module):
         
     def forward(self, x_i: Tensor, edge_index_i: Tensor, x_j: Tensor, edge_index_j: Tensor,
                 conv_dropout: int = 0):
-        """
+        r"""
         """
         # Strategy One: Graph-Level Embedding Interaction
         for filter_idx, conv in enumerate(self.convs):
