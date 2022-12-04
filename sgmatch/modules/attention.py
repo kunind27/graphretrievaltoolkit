@@ -12,11 +12,9 @@ class GlobalContextAttention(torch.nn.Module):
     TODO: Include latex formula for attention computation and aggregation update
 
     Args:
-        input_dim: 
-        type: Type of attention mechanism to be used
         input_dim: Input Dimension of the Node Embeddings
         activation: The Activation Function to be used for the Attention Layer
-        a: Slope of the -ve part if the activation is Leaky ReLU
+        activation_slope: Slope of the -ve part if the activation is Leaky ReLU
     """
     def __init__(self, input_dim, activation: str = "tanh", activation_slope: Optional[float] = None):
         super(GlobalContextAttention, self).__init__()
@@ -38,6 +36,7 @@ class GlobalContextAttention(torch.nn.Module):
         self.weight_matrix = torch.nn.Parameter(torch.Tensor(self.input_dim, self.input_dim))
 
     def reset_parameters(self):
+        # BUG: ReLU needs an activation_slope, why? Presumably activation_slope was for leaky relu
         if self.activation == "leaky_relu" or self.activation == "relu":
             if self.activation_slope is None or self.activation_slope <= 0:
                 raise ValueError(f"Activation function slope parameter needs to be a positive \
@@ -82,6 +81,14 @@ class GlobalContextAttention(torch.nn.Module):
 
 class CrossGraphAttention(torch.nn.Module):
     r"""
+    Attention mechanism layer for the cross-graph attention operator
+    from the `"Graph Matching Networks for Learning the Similarity of Graph 
+    Structured Objects" https://arxiv.org/pdf/1904.12787.pdf`_ paper
+
+    TODO: Include latex formula for attention computation and aggreagation update
+
+    Args:
+        similarity_metric: Similarity metric to be used to compute attention scoring 
     """
     def __init__(self, similarity_metric: str = "euclidean"):
         super(CrossGraphAttention, self).__init__()
