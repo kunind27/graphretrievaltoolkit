@@ -1,11 +1,13 @@
-from typing import Optional
+from typing import Optional, List
 
 import torch
 from torch_geometric.nn.aggr.attention import AttentionalAggregation
+from torch.functional import Tensor
 
 from ..modules.encoder import MLPEncoder
 from ..modules.propagation import GraphProp
 from ..modules.attention import CrossGraphAttention
+from ..utils.utility import setup_linear_nn
 
 class GMNEmbed(torch.nn.Module):
     r"""
@@ -43,10 +45,11 @@ class GMNEmbed(torch.nn.Module):
         self.prop_type = "embedding"
         
         self.setup_layers()
+        self.reset_parameters()
 
     def setup_layers(self):
-        self._encoder = MLPEncoder(node_feature_dim, node_hidden_sizes, edge_feature_dim=edge_feature_dim, 
-                            edge_hidden_sizes=edge_hidden_sizes)
+        self._encoder = MLPEncoder(self.node_feature_dim, self.node_hidden_sizes, edge_feature_dim=self.edge_feature_dim, 
+                            edge_hidden_sizes=self.edge_hidden_sizes)
         self._propagator = GraphProp(self.node_feature_dim, self.prop_node_layers, self.prop_message_layers, 
                                edge_feature_dim=self.edge_feature_dim, message_net_init_scale=self.message_net_init_scale,
                                node_update_type=self.node_update_type, use_reverse_direction=self.use_reverse_direction,
@@ -54,10 +57,19 @@ class GMNEmbed(torch.nn.Module):
                                prop_type=self.prop_type)        
         
         # Setup aggregator MLPs
-        self.aggr_gate = setup_LRL(self.node_feature_dim, self.aggr_gate_layers)
-        self.aggr_mlp = setup_LRL(self.node_feature_dim, self.aggr_mlp_layers)
+        self.aggr_gate = setup_linear_nn(self.node_feature_dim, self.aggr_gate_layers)
+        self.aggr_mlp = setup_linear_nn(self.node_feature_dim, self.aggr_mlp_layers)
 
         self._aggregator = AttentionalAggregation(self.aggr_gate, self.aggr_mlp)
+
+    def reset_parameters(self):
+        self._encoder.reset_parameters()
+        self._propagator.reset_parameters()
+        for lin in self.aggr_gate:
+            lin.reset_parameters()
+        for lin in self.aggr_mlp:
+            lin.reset_parameters()
+        self._aggregator.reset_parameters()
 
     def forward(self, node_features: Tensor, edge_index: Tensor, edge_features: Optional[Tensor] = None,
                 num_prop: int = 10):
@@ -74,6 +86,10 @@ class GMNEmbed(torch.nn.Module):
             node_features = self._propagator(node_features, from_idx, to_idx, edge_features)
 
         return self._aggregator(node_features)
+
+    def __repr__(self):
+        # TODO
+        pass
 
 class GMNMatch(torch.nn.Module):
     r"""
@@ -112,37 +128,52 @@ class GMNMatch(torch.nn.Module):
         self.prop_type = "matching"
         
         self.setup_layers()
+        self.reset_parameters()
 
     def setup_layers(self):
-        self._encoder = MLPEncoder(node_feature_dim, node_hidden_sizes, edge_feature_dim=edge_feature_dim, 
-                            edge_hidden_sizes=edge_hidden_sizes)
+        self._encoder = MLPEncoder(self.node_feature_dim, self.node_hidden_sizes, edge_feature_dim=self.edge_feature_dim, 
+                            edge_hidden_sizes=self.edge_hidden_sizes)
         self._attention = CrossGraphAttention(similarity_metric=self.attention_sim_metric)
         self._propagator = GraphProp(self.node_feature_dim, self.prop_node_layers, self.prop_message_layers, 
                                edge_feature_dim=self.edge_feature_dim, message_net_init_scale=self.message_net_init_scale,
                                node_update_type=self.node_update_type, use_reverse_direction=self.use_reverse_direction,
                                reverse_dir_param_different=self.reverse_dir_param_different, layer_norm=self.layer_norm,
-                               prop_type=self.prop_type)        
-
+                               prop_type=self.prop_type)
+        self._attention = CrossGraphAttention(similarity_metric=self.attention_sim_metric)
+        
         # Setup aggregator MLPs
-        self.aggr_gate = setup_LRL(self.node_feature_dim, self.aggr_gate_layers)
-        self.aggr_mlp = setup_LRL(self.node_feature_dim, self.aggr_mlp_layers)
+        self.aggr_gate = setup_linear_nn(self.node_feature_dim, self.aggr_gate_layers)
+        self.aggr_mlp = setup_linear_nn(self.node_feature_dim, self.aggr_mlp_layers)
 
         self._aggregator = AttentionalAggregation(self.aggr_gate, self.aggr_mlp)
 
-    def forward(self, node_features_i: Tensor, node_features_j: Tensor, edge_index_i: Tensor, edge_index_j: Tensor, 
+    def reset_parameters(self):
+        self._encoder.reset_parameters()
+        self._propagator.reset_parameters()
+        for lin in self.aggr_gate:
+            lin.reset_parameters()
+        for lin in self.aggr_mlp:
+            lin.reset_parameters()
+        self._aggregator.reset_parameters()
+
+    def forward(self, node_features_i: Tensor, node_features_j: Tensor, edge_index_i: Tensor, 
                 edge_features_i: Optional[Tensor] = None, num_prop: int = 10):
         r"""
         """
-        from_idx = edge_index[:,0] if len(edge_index.shape) == 3 else edge_index[0]
-        to_idx = edge_index[:,1] if len(edge_index.shape) == 3 else edge_index[1]
+        from_idx = edge_index_i[:,0] if len(edge_index_i.shape) == 3 else edge_index_i[0]
+        to_idx = edge_index_i[:,1] if len(edge_index_i.shape) == 3 else edge_index_i[1]
 
-        if edge_features is not None:
-            node_features, edge_features = self._encoder(node_features, edge_features)
+        if edge_features_i is not None:
+            node_features_i, edge_features_i = self._encoder(node_features_i, edge_features_i)
         else:
-            node_features = self._encoder(node_features)
+            node_features_i = self._encoder(node_features_i)
         
         for _ in range(num_prop):
             # TODO: Can include a list keeping track of propagation layer outputs
-            node_features = self._propagator(node_features, from_idx, to_idx, node_features_j, edge_features)
+            node_features_i = self._propagator(node_features_i, from_idx, to_idx, node_features_j, edge_features_i, att_module=self._attention)
 
-        return self._aggregator(node_features)
+        return self._aggregator(node_features_i)
+
+    def __repr__(self):
+        # TODO
+        pass

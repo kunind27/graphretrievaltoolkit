@@ -8,6 +8,7 @@ from torch_geometric.nn.conv import GCNConv, SAGEConv, GATConv
 
 from ..modules.attention import GlobalContextAttention
 from ..modules.ntn import NeuralTensorNetwork
+from ..utils.utility import setup_linear_nn, setup_conv_layers
 
 class SimGNN(torch.nn.Module):
     r"""
@@ -17,54 +18,43 @@ class SimGNN(torch.nn.Module):
     TODO: Provide description of implementation and differences from paper if any
     """
     def __init__(self, input_dim: int, ntn_slices: int = 16, filters: list = [64, 32, 16],
-                 mlp_neurons: List[int] = [32,16,8,4], hist_bins: int = 16, conv: str = "gcn", 
-                 activation = "tanh", include_histogram = False):
+                 mlp_neurons: List[int] = [32,16,8,4], hist_bins: int = 16, conv: str = "GCN", 
+                 activation: str = "tanh", activation_slope: Optional[float] = None, 
+                 include_histogram: bool = False):
         # TODO: give a better name to the include_histogram flag 
         super(SimGNN, self).__init__()
         self.input_dim = input_dim
-        self.conv_type = conv
-        self.filters = filters
-        self.activation = activation
-        self.mlp_neurons = mlp_neurons
-        
-        # Hyperparameters
         self.ntn_slices = ntn_slices
+        self.filters = filters
+        self.mlp_neurons = mlp_neurons
         self.hist_bins = hist_bins
-    
+        self.conv_type = conv
+        self.activation = activation
+        self.activation_slope = activation_slope
+        self.include_histogram = include_histogram
+
         self.setup_layers()
         self.reset_parameters()
 
     def setup_layers(self):
-        # XXX: Should MLP and GNNs be defined as separate classes to avoid clutter?
+        # XXX: Should MLP and GNNs be defined as separate classes instead of methods?
 
         # Convolutional GNN layer
-        self.convs = torch.nn.ModuleList()
-        conv_methods = {"gcn": GCNConv, "sage": SAGEConv, "gat": GATConv}
-        _conv = conv_methods[self.conv_type]
-        num_layers = len(self.filters)
-        self._in = self.input_dim
-        for i in range(num_layers):
-            self._out = self.filters[i]
-            self.convs.append(_conv(in_channels=self._in, out_channels=self._out))
-            self._in = self._out
+        self.convs = setup_conv_layers(self.input_dim, conv_type=self.conv_type, filters=self.filters)
 
         # Global self attention layer
-        self.attention_layer = GlobalContextAttention(self.input_dim, activation = self.activation)
+        self.attention_layer = GlobalContextAttention(self.input_dim, activation = self.activation, 
+                                                      activation_slope=self.activation_slope)
         # Neural Tensor Network module
         self.ntn_layer = NeuralTensorNetwork(self.input_dim, slices = self.ntn_slices, activation = self.activation)
         
         # MLP layer
-        self.mlp = torch.nn.ModuleList()
-        num_layers = len(mlp_neurons)
         if self.include_histogram:
             self._in = self.ntn_slices + self.hist_bins
         else: 
             self._in = self.ntn_slices
-        for i in range(num_layers):
-            self._out = mlp_neurons[i]
-            self.mlp.append(torch.nn.Linear(self._in, self._out))
-            self._in = self._out
-        self.scoring_layer = torch.nn.Linear(mlp_neurons[-1], 1)
+        self.mlp = setup_linear_nn(self._in, self.mlp_neurons)
+        self.scoring_layer = torch.nn.Linear(self.mlp_neurons[-1], 1)
 
     def reset_parameters(self):
         for conv in self.convs:
@@ -73,6 +63,7 @@ class SimGNN(torch.nn.Module):
         self.ntn_layer.reset_parameters()
         for lin in self.mlp:
             lin.reset_parameters()
+        self.scoring_layer.reset_parameters()
         
     def forward(self, x_i: Tensor, edge_index_i: Tensor, x_j: Tensor, edge_index_j: Tensor,
                 conv_dropout: int = 0):
@@ -96,7 +87,7 @@ class SimGNN(torch.nn.Module):
         interaction = self.ntn_layer(h_i, h_j) 
         
         # Strategy Two: Pairwise Node Comparison
-        if include_histogram:
+        if self.include_histogram:
             sim_matrix = torch.matmul(h_i, h_j.transpose(-1,-2)).detach()
             sim_matrix = torch.sigmoid(sim_matrix)
             # XXX: is this if statement necessary? Can writing the histogram operation as a single 
@@ -111,10 +102,17 @@ class SimGNN(torch.nn.Module):
             interaction = torch.cat((interaction, hist), dim = -2)
         
         # Final interaction score prediction
-        for layer_idx, lin in enumerate(self.mlp):
+        for _, lin in enumerate(self.mlp):
             interaction = lin(interaction)
             interaction = torch.nn.functional.relu(interaction)
-        # XXX: torch.sigmoid used for normalization, appropriate?
-        interaction = torch.sigmoid(self.scoring_layer(interaction))
+        # XXX: should torch.sigmoid be used for normalization of scores?
+        interaction = self.scoring_layer(interaction)
         
         return interaction
+    
+    def loss(self, sim, gt):
+        num_graph_pairs = sim.shape[-1] # Batch size
+
+        batch_loss = torch.div(torch.sum(torch.square(sim-gt), dim=-1), num_graph_pairs)
+
+        return batch_loss
