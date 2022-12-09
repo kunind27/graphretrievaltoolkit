@@ -10,7 +10,7 @@ class NeuralTensorNetwork(torch.nn.Module):
     <https://arxiv.org/pdf/1808.05689.pdf>`_ paper
 
     TODO: Include latex formula for NTN interaction score computation
-
+    
     Args:
         input_dim: Input dimension of the graph-level embeddings
         slices: Number of slices (K) the weight tensor possesses. Often 
@@ -38,7 +38,7 @@ class NeuralTensorNetwork(torch.nn.Module):
         torch.nn.init.xavier_uniform_(self.weight_matrix)
         torch.nn.init.xavier_uniform_(self.bias)
     
-    def forward(self, h_i: Tensor, h_j: Tensor) -> Tensor:
+    def forward(self, h_i: Tensor, h_j: Tensor):
         r"""
         Args:
             h_i: First graph-level embedding
@@ -60,7 +60,3 @@ class NeuralTensorNetwork(torch.nn.Module):
         scores = _activation(scores)
 
         return scores
-        
-
-
-

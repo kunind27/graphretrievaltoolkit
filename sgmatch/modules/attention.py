@@ -10,7 +10,7 @@ class GlobalContextAttention(torch.nn.Module):
     <https://arxiv.org/pdf/1808.05689.pdf>`_ paper
 
     TODO: Include latex formula for attention computation and aggregation update
-
+    
     Args:
         input_dim: Input Dimension of the Node Embeddings
         activation: The Activation Function to be used for the Attention Layer
@@ -32,6 +32,7 @@ class GlobalContextAttention(torch.nn.Module):
         If tanh/sigmoid : Xavier Initialization
 
         TODO: Initialisation methods need justification/reference
+        
         """
         self.weight_matrix = torch.nn.Parameter(torch.Tensor(self.input_dim, self.input_dim))
 
@@ -40,7 +41,7 @@ class GlobalContextAttention(torch.nn.Module):
         if self.activation == "leaky_relu" or self.activation == "relu":
             if self.activation_slope is None or self.activation_slope <= 0:
                 raise ValueError(f"Activation function slope parameter needs to be a positive \
-                                value. {} is invalid".format(self.activation_slope))
+                                value. {self.activation_slope} is invalid")
             
             torch.nn.init.kaiming_normal_(self.weight_matrix, a = self.activation_slope, nonlinearity = self.activation)
         elif self.activation == "tanh" or self.activation == "sigmoid":
@@ -49,7 +50,7 @@ class GlobalContextAttention(torch.nn.Module):
             raise ValueError("Activation can only take values: 'relu', 'leaky_relu', 'sigmoid', 'tanh';\
                             {} is invalid".format(self.activation))
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor):
         r""" 
         Args:
             x (torch.Tensor) : Node Embedding Tensor of shape N x D.
@@ -85,7 +86,7 @@ class CrossGraphAttention(torch.nn.Module):
     from the `"Graph Matching Networks for Learning the Similarity of Graph 
     Structured Objects" https://arxiv.org/pdf/1904.12787.pdf`_ paper
 
-    TODO: Include latex formula for attention computation and aggreagation update
+    TODO: Include latex formula for attention computation and aggregation update
 
     Args:
         similarity_metric: Similarity metric to be used to compute attention scoring 
