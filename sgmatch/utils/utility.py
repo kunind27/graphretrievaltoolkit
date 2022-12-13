@@ -2,10 +2,12 @@ from typing import List
 
 import torch
 
-from constants import CONVS, ACTIVATIONS
+from .constants import CONVS, ACTIVATIONS
 # from torch import cuda
 
 def setup_linear_nn(input_dim: int, hidden_sizes: List[int]):
+    r"""
+    """
     mlp = torch.nn.ModuleList()
     _in = input_dim
     for i in range(len(hidden_sizes)):
@@ -17,6 +19,8 @@ def setup_linear_nn(input_dim: int, hidden_sizes: List[int]):
 
 def setup_LRL_nn(input_dim: int, hidden_sizes: List[int], 
                  activation: str = "relu"):
+    r"""
+    """
     # XXX: Better to leave this up to MLP class?
     mlp = []
     _in = input_dim
@@ -32,6 +36,8 @@ def setup_LRL_nn(input_dim: int, hidden_sizes: List[int],
     return mlp
 
 def setup_conv_layers(input_dim, conv_type, filters):
+    r"""
+    """
     convs = torch.nn.ModuleList()
     _conv = CONVS[conv_type]
     num_layers = len(filters)

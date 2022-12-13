@@ -3,11 +3,12 @@ from typing import Optional, List
 import torch
 from torch_geometric.nn.aggr.attention import AttentionalAggregation
 from torch.functional import Tensor
+from torch_geometric.nn.inits import reset
 
 from ..modules.encoder import MLPEncoder
 from ..modules.propagation import GraphProp
 from ..modules.attention import CrossGraphAttention
-from ..utils.utility import setup_linear_nn
+from ..utils.utility import setup_linear_nn, setup_LRL_nn
 
 class GMNEmbed(torch.nn.Module):
     r"""
@@ -33,8 +34,8 @@ class GMNEmbed(torch.nn.Module):
         self.prop_message_layers = prop_message_hidden_sizes
         
         # Aggregation Module
-        self.aggr_gate_layers = aggr_gate_hidden_sizes + [node_feature_dim]
-        self.aggr_mlp_layers = aggr_mlp_hidden_sizes + [node_feature_dim]
+        self.aggr_gate_layers = aggr_gate_hidden_sizes
+        self.aggr_mlp_layers = aggr_mlp_hidden_sizes
 
         self.message_net_init_scale = message_net_init_scale # Unused
         self.node_update_type = node_update_type
@@ -43,32 +44,30 @@ class GMNEmbed(torch.nn.Module):
 
         self.layer_norm = layer_norm
         self.prop_type = "embedding"
+
+        # TODO: Include assertion method to ensure correct dimensionality for mlp outputs
         
         self.setup_layers()
         self.reset_parameters()
 
     def setup_layers(self):
-        self._encoder = MLPEncoder(self.node_feature_dim, self.node_hidden_sizes, edge_feature_dim=self.edge_feature_dim, 
-                            edge_hidden_sizes=self.edge_hidden_sizes)
-        self._propagator = GraphProp(self.node_feature_dim, self.prop_node_layers, self.prop_message_layers, 
+        self._encoder = MLPEncoder(self.node_feature_dim, self.enc_node_layers, edge_feature_dim=self.edge_feature_dim, 
+                                   edge_hidden_sizes=self.enc_edge_layers)
+        self._propagator = GraphProp(self.enc_node_layers[-1], self.prop_node_layers, self.prop_message_layers, 
                                edge_feature_dim=self.edge_feature_dim, message_net_init_scale=self.message_net_init_scale,
                                node_update_type=self.node_update_type, use_reverse_direction=self.use_reverse_direction,
                                reverse_dir_param_different=self.reverse_dir_param_different, layer_norm=self.layer_norm,
                                prop_type=self.prop_type)        
         
         # Setup aggregator MLPs
-        self.aggr_gate = setup_linear_nn(self.node_feature_dim, self.aggr_gate_layers)
-        self.aggr_mlp = setup_linear_nn(self.node_feature_dim, self.aggr_mlp_layers)
+        self.aggr_gate = setup_LRL_nn(self.prop_node_layers[-1], self.aggr_gate_layers)
+        self.aggr_mlp = setup_LRL_nn(self.prop_node_layers[-1], self.aggr_mlp_layers)
 
         self._aggregator = AttentionalAggregation(self.aggr_gate, self.aggr_mlp)
 
     def reset_parameters(self):
         self._encoder.reset_parameters()
         self._propagator.reset_parameters()
-        for lin in self.aggr_gate:
-            lin.reset_parameters()
-        for lin in self.aggr_mlp:
-            lin.reset_parameters()
         self._aggregator.reset_parameters()
 
     def forward(self, node_features: Tensor, edge_index: Tensor, edge_features: Optional[Tensor] = None,
@@ -85,7 +84,7 @@ class GMNEmbed(torch.nn.Module):
             # TODO: Can include a list keeping track of propagation layer outputs
             node_features = self._propagator(node_features, from_idx, to_idx, edge_features)
 
-        return self._aggregator(node_features)
+        return self._aggregator(node_features, index=None)
 
     def __repr__(self):
         # TODO

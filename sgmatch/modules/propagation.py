@@ -3,8 +3,8 @@ from typing import Optional, List
 import torch
 from torch.functional import Tensor
 
-from utils.segment import unsorted_segment_sum
-from utils.utility import setup_linear_nn
+from ..utils.segment import unsorted_segment_sum
+from ..utils.utility import setup_linear_nn
 
 # TODO: Credit GMN authors and codebase
 # TODO: Fill all docstrings to update on RTD
@@ -31,6 +31,7 @@ class GraphProp(torch.nn.Module):
         self.layer_norm = layer_norm
         self.prop_type = prop_type
         self.setup_layers()
+        self.reset_parameters()
 
         if self.layer_norm:
             self.layer_norm1 = torch.nn.LayerNorm()
@@ -59,9 +60,11 @@ class GraphProp(torch.nn.Module):
             # TODO: Is the input correct? Should it instead be self.node_feature_dim + self.message_hidden_sizes[-1] and so on
             # Possible BUG: Difficult to see how these input sizes are correct acc to formula in paper
             if self.prop_type == 'embedding':
-                self._in = self.node_feature_dim * 3
+                # self._in = self.node_feature_dim * 3
+                self._in = self.node_feature_dim * 2
             elif self.prop_type == 'matching':
-                self._in = self.node_feature_dim * 4
+                # self._in = self.node_feature_dim * 4
+                self._in = self.node_feature_dim * 3
             
             self.MLP = setup_linear_nn(self._in, self.node_hidden_sizes)
 
@@ -81,8 +84,8 @@ class GraphProp(torch.nn.Module):
                          message_net: torch.nn.Module, edge_features: Optional[Tensor] = None):
         r"""
         """
-        from_features = node_features[from_idx]
-        to_features = node_features[to_idx]
+        from_features = node_features[:,from_idx] if len(node_features.shape) == 3 else node_features[from_idx]
+        to_features = node_features[:,to_idx] if len(node_features.shape) == 3 else node_features[to_idx]
         net_inputs = [from_features, to_features]
 
         if edge_features is not None:
@@ -91,7 +94,7 @@ class GraphProp(torch.nn.Module):
         net_inputs = torch.cat(net_inputs, dim=-1)
         messages = net_inputs
         for lin in message_net:
-            messages = lin(net_inputs)
+            messages = lin(messages)
             messages = torch.nn.functional.relu(messages)
 
         return messages
@@ -138,11 +141,11 @@ class GraphProp(torch.nn.Module):
         r"""
         """
         # XXX: extra node_features argument removed from original code to keep it simple for now
-        messages = self._compute_messages(node_features, from_idx, to_idx, self.message_net, edge_feature=edge_features)
+        messages = self._compute_messages(node_features, from_idx, to_idx, self.message_net, edge_features=edge_features)
         aggregated_messages = self._aggregate_messages(messages, to_idx, node_features.shape[0])
 
         if self.use_reverse_direction:
-            reverse_messages = self._compute_messages(node_features, to_idx, from_idx, self.reverse_message_net, edge_feature=edge_features)
+            reverse_messages = self._compute_messages(node_features, to_idx, from_idx, self.reverse_message_net, edge_features=edge_features)
             reverse_aggregated_messages = self._aggregate_messages(reverse_messages, from_idx, node_features.shape[0])
 
             aggregated_messages += reverse_aggregated_messages
