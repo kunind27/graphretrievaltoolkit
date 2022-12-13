@@ -23,7 +23,8 @@ class MLPEncoder(torch.nn.Module):
         # TODO: Include error handling for empty MLP layer size lists
         edge_err = (self.edge_feature_dim is not None) ^ (self.edge_hidden_sizes is not None)
         if edge_err:
-            raise RuntimeError("One of edge_feature_dim or edge_hidden_sizes not specified")
+            raise RuntimeError("One of edge_feature_dim or edge_hidden_sizes is not None,\
+                                specify both of them if edge features are to be used")
         self._in = self.node_feature_dim
         self.mlp_node = setup_linear_nn(self._in, self.node_hidden_sizes)
         
@@ -34,8 +35,9 @@ class MLPEncoder(torch.nn.Module):
     def reset_parameters(self):
         for lin in self.mlp_node:
             lin.reset_parameters()
-        for lin in self.mlp_edge:
-            lin.reset_parameters()
+        if self.edge_feature_dim is not None:
+            for lin in self.mlp_edge:
+                lin.reset_parameters()
 
     def forward(self, node_features: Tensor, edge_features: Optional[Tensor] = None):
         if edge_features is not None and self.edge_feature_dim is None:
@@ -58,3 +60,48 @@ class MLPEncoder(torch.nn.Module):
                     edge_hidden_sizes={})').format(self.__class__.__name__, self.node_feature_dim,
                                                    self.edge_feature_dim, self.node_hidden_sizes,  
                                                    self.edge_hidden_sizes)
+
+class OrderEmbedder(torch.nn.Module):
+    r"""
+    """
+    def __init__(self, margin, use_intersection: bool = False):
+        super(OrderEmbedder, self).__init__()
+        self.margin = margin
+        self.use_intersection = use_intersection
+
+        # self.clf_model = nn.Sequential(nn.Linear(1, 2), nn.LogSoftmax(dim=-1))
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
+    
+    def forward(self, node_emb_i, node_emb_j):
+        return node_emb_i, node_emb_j
+
+    def predict(self, node_emb_i: Tensor, node_emb_j: Tensor):
+        r"""Predict if i is a subgraph of j, where node_emb_i, node_emb_j = pred.
+        pred: list (node_emb_i, node_emb_j) of embeddings of graph pairs
+        Returns: list of bools (whether i is subgraph of j in the pair)
+        """
+        # TODO: Split computation for readability
+        e = torch.sum(torch.max(torch.zeros_like(node_emb_i, device=self.device), node_emb_j - node_emb_i)**2, dim=1)
+        return e
+
+    def criterion(self, node_emb_i: Tensor, node_emb_j: Tensor, 
+                 labels: Tensor, intersect_embs: Optional[Tensor] = None):
+        r"""Loss function for order emb.
+        The e term is the amount of violation (if b is a subgraph of a).
+        For positive examples, the e term is minimized (close to 0); 
+        for negative examples, the e term is trained to be at least greater than self.margin.
+        pred: lists of embeddings outputted by forward
+        intersect_embs: not used
+        labels: subgraph labels for each entry in pred
+        """
+        # TODO: Remove intersect embs if unnecessary
+        # XXX: Should criterions and losses be separated out in another module?
+        e = torch.sum(torch.max(torch.zeros_like(node_emb_i, device=self.device), node_emb_j - node_emb_i)**2, dim=1)
+
+        e[labels == 0] = torch.max(torch.tensor(0.0, device=self.device), self.margin - e)[labels == 0]
+        relation_loss = torch.sum(e)
+
+        return relation_loss
