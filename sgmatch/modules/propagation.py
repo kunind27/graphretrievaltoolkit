@@ -36,8 +36,8 @@ class GraphProp(torch.nn.Module):
             vectors. (default: :obj:`None`)
         message_net_init_scale (float): Initialisation scale for the message net output 
             vectors. (default: :obj:`0.1`)
-        node_update_type (str): Type of update applied to node feature vectors (:obj:`"GRU" or 
-            :obj:`"MLP" or :obj:`"residual`) (default: :obj:`"residual"`)
+        node_update_type (str): Type of update applied to node feature vectors (:obj:`"GRU"` or 
+            :obj:`"MLP"` or :obj:`"residual`) (default: :obj:`"residual"`)
         use_reverse_direction (bool): Specifies whether or not to use the reverse message 
             aggregation for propagation step. (default: :obj:`False`)
         reverse_dir_param_different (bool): Specifies whether or not message computation model 
@@ -199,7 +199,6 @@ class GraphProp(torch.nn.Module):
                 edge_features: Optional[Tensor] = None, att_module: Optional[torch.nn.Module | str] = None):
         # TODO: Generalise function to accept edge_index and sparse edge indices
         # TODO: Checking validity of user-provided cross graph attention module
-        # TODO: Replace nC2 with proper expression
         r"""
         Implementation of the forward call for the propagation scheme.
 
@@ -214,7 +213,7 @@ class GraphProp(torch.nn.Module):
                 for computing cross-graph attention aggregated vectors. Ignored if 
                 :obj:`att_module` is :obj:`None` (default: :obj:`None`)
             edge_features (Tensor, Optional): Edge-wise feature vectors in embedding
-                space of dimensionality :obj`E` with shape :obj:`[nC2, E] (default: :obj:`None`)
+                space of dimensionality :obj`E` with shape :obj:`[num_edges, E] (default: :obj:`None`)
             att_module (torch.nn.Module, Optional): Cross-graph attention module, can be 
                 appropriately user-defined if :obj:`sgmatch.modules.attention.CrossGraphAttention` 
                 or :obj:`"default"` are not given as the argument. (default: :obj:`None`)
@@ -252,7 +251,7 @@ class GraphProp(torch.nn.Module):
         return out
     
     def __repr__(self):
-        return (f'{}(node_feature_dim={}, node_hidden_sizes={}, message_hidden_sizes={}, \
+        return ('{}(node_feature_dim={}, node_hidden_sizes={}, message_hidden_sizes={}, \
                     edge_feature_dim={})'.format(self.__class__.__name__, self.node_feature_dim,
                                                  self.node_hidden_sizes, self.message_hidden_sizes,
                                                  self.edge_feature_dim))

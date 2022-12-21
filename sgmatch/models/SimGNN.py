@@ -16,11 +16,36 @@ class SimGNN(torch.nn.Module):
     to Fast Graph Similarity Computation" <https://arxiv.org/pdf/1808.05689.pdf>`_ paper.
     
     TODO: Provide description of implementation and differences from paper if any
+
+    Args:
+        input_dim (int): Input dimension of node feature embedding vectors
+        ntn_slices (int): Hyperparameter for the number of tensor slices in the
+            Neural Tensor Network. In this domain, it denotes the number of interaction 
+            (similarity) scores produced by the model for each graph embedding pair.
+        filters ([int]): Number of filters per convolutional layer in the graph 
+            convolutional encoder model. (default: :obj:`[64, 32, 16]`)
+        mlp_neurons ([int]): Number of hidden neurons in each linear layer of 
+            MLP for reducing dimensionality of concatenated output of neural 
+            tensor network and histogram features. Note that the final scoring 
+            weight tensor of size :obj:`[mlp_neurons[-1], 1]` is kept separate
+            from the MLP, therefore specifying only the hidden layer sizes will
+            suffice. (default: :obj:`[32,16,8,4]`)
+        hist_bins (int): Hyperparameter controlling the number of bins in the node 
+            ordering histogram scheme. (default: :obj:`16`)
+        conv (str): Type of graph convolutional architecture to be used for encoding
+            (:obj:`'GCN'` or :obj:`'SAGE'` or :obj:`'GAT'`) (default: :obj:`'GCN'`)
+        activation (str): Type of activation used in Attention and NTN modules. 
+            (:obj:`'sigmoid'` or :obj:`'relu'` or :obj:`'leaky_relu'` or :obj:`'tanh'`) 
+            (default: :obj:`'tanh`)
+        activation_slope (float, Optional): Slope of function for leaky_relu activation. 
+            (default: :obj:`None`)
+        include_histogram (bool): Flag for including Strategy Two: Nodewise comparison
+            from SimGNN. (default: :obj:`True`)
     """
     def __init__(self, input_dim: int, ntn_slices: int = 16, filters: list = [64, 32, 16],
                  mlp_neurons: List[int] = [32,16,8,4], hist_bins: int = 16, conv: str = "GCN", 
                  activation: str = "tanh", activation_slope: Optional[float] = None, 
-                 include_histogram: bool = False):
+                 include_histogram: bool = True):
         # TODO: give a better name to the include_histogram flag 
         super(SimGNN, self).__init__()
         self.input_dim = input_dim
@@ -38,6 +63,8 @@ class SimGNN(torch.nn.Module):
 
     def setup_layers(self):
         # XXX: Should MLP and GNNs be defined as separate classes instead of methods?
+        # XXX: Use MLPEncoder for MLP model
+        # XXX: How to properly separate activations given to attention and NTN? 
 
         # Convolutional GNN layer
         self.convs = setup_conv_layers(self.input_dim, conv_type=self.conv_type, filters=self.filters)
@@ -67,8 +94,6 @@ class SimGNN(torch.nn.Module):
         
     def forward(self, x_i: Tensor, edge_index_i: Tensor, x_j: Tensor, edge_index_j: Tensor,
                 conv_dropout: int = 0):
-        r"""
-        """
         # Strategy One: Graph-Level Embedding Interaction
         for filter_idx, conv in enumerate(self.convs):
             x_i = conv(x_i, edge_index_i)
@@ -98,6 +123,7 @@ class SimGNN(torch.nn.Module):
             else:
                 scores = sim_matrix.view(-1, 1)
                 hist = torch.histc(scores, bins = self.hist_bins)
+            # TODO: Normalise histogram features
             hist = hist.unsqueeze(-1)
             interaction = torch.cat((interaction, hist), dim = -2)
         
