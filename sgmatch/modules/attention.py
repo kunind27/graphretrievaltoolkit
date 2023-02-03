@@ -2,6 +2,7 @@ from typing import Optional
 
 import torch
 from torch.functional import Tensor
+from ..utils.constants import ACTIVATIONS
 
 class GlobalContextAttention(torch.nn.Module):
     r"""
@@ -16,7 +17,7 @@ class GlobalContextAttention(torch.nn.Module):
         activation: The Activation Function to be used for the Attention Layer
         activation_slope: Slope of the -ve part if the activation is Leaky ReLU
     """
-    def __init__(self, input_dim, activation: str = "tanh", activation_slope: Optional[float] = None):
+    def __init__(self, input_dim: int, activation: str = "tanh", activation_slope: Optional[float] = None):
         super(GlobalContextAttention, self).__init__()
         self.input_dim = input_dim
         self.activation = activation 
@@ -62,8 +63,8 @@ class GlobalContextAttention(torch.nn.Module):
         if x.shape[1] != self.input_dim:
             raise RuntimeError("dim 1 of input tensor does not match dimension of weight matrix")
         # XXX: Have these dicts stored in separate files?
-        activations = {"tanh": torch.nn.functional.tanh, "leaky_relu": torch.nn.functional.leaky_relu,
-                        "relu": torch.nn.functional.relu, "sigmoid": torch.nn.functional.sigmoid}
+        activations = {"tanh": torch.tanh, "leaky_relu": torch.nn.functional.leaky_relu,
+                        "relu": torch.relu, "sigmoid": torch.sigmoid}
         if self.activation not in activations.keys():
             raise ValueError(f"Invalid activation function specified: {self.activation}")
 
@@ -71,7 +72,7 @@ class GlobalContextAttention(torch.nn.Module):
         global_context = torch.mean(torch.matmul(x, self.weight_matrix), dim = 0)
 
         # Applying the Non-Linearity over global context vector
-        _activation = activations[self.activation]
+        _activation = ACTIVATIONS[self.activation]
         global_context = _activation(global_context)
 
         # Computing attention weights and att-weight-aggregating node embeddings
@@ -79,6 +80,9 @@ class GlobalContextAttention(torch.nn.Module):
         representation = torch.sum(x * att_weights, dim = 0)
         
         return representation
+    
+    def __repr__(self):
+        return ('{}(input_dim={})').format(self.__class__.__name__, self.input_dim)
 
 class CrossGraphAttention(torch.nn.Module):
     r"""
@@ -113,6 +117,9 @@ class CrossGraphAttention(torch.nn.Module):
         h_j -= torch.matmul(a_j.transpose(-1,0), h_i)
 
         return h_i, h_j
+
+    def __repr__(self):
+        return ('{}()').format(self.__class__.__name__)
 
 
         

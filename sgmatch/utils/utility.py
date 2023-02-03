@@ -2,7 +2,7 @@ from typing import List
 
 import torch
 
-from .constants import CONVS, ACTIVATIONS
+from .constants import CONVS, ACTIVATION_LAYERS
 # from torch import cuda
 
 def setup_linear_nn(input_dim: int, hidden_sizes: List[int]):
@@ -24,11 +24,11 @@ def setup_LRL_nn(input_dim: int, hidden_sizes: List[int],
     # XXX: Better to leave this up to MLP class?
     mlp = []
     _in = input_dim
-    activation = ACTIVATIONS[activation]
+    _activation = ACTIVATION_LAYERS[activation]
     for i in range(len(hidden_sizes) - 1):
         _out = hidden_sizes[i]
         mlp.append(torch.nn.Linear(_in, _out))
-        mlp.append(activation())
+        mlp.append(_activation())
         _in = _out
     mlp.append(torch.nn.Linear(_in, hidden_sizes[-1]))
     mlp = torch.nn.Sequential(*mlp)

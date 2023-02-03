@@ -46,6 +46,7 @@ class NeuralTensorNetwork(torch.nn.Module):
         Returns:
             scores: (K, 1) graph-graph interaction score vector
         """
+        import ipdb; ipdb.set_trace()
         scores = torch.matmul(h_i, self.weight_tensor)
         scores = torch.matmul(scores, torch.t(h_j)).squeeze(-1)
         scores += torch.matmul(self.weight_matrix, torch.t(torch.cat([h_i, h_j], dim=-1)))

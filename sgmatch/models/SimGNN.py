@@ -65,15 +65,16 @@ class SimGNN(torch.nn.Module):
         # XXX: Should MLP and GNNs be defined as separate classes instead of methods?
         # XXX: Use MLPEncoder for MLP model
         # XXX: How to properly separate activations given to attention and NTN? 
+        # XXX: What dimensions to use at end/start of each layer?
 
         # Convolutional GNN layer
         self.convs = setup_conv_layers(self.input_dim, conv_type=self.conv_type, filters=self.filters)
 
         # Global self attention layer
-        self.attention_layer = GlobalContextAttention(self.input_dim, activation = self.activation, 
+        self.attention_layer = GlobalContextAttention(self.filters[-1], activation = self.activation, 
                                                       activation_slope=self.activation_slope)
         # Neural Tensor Network module
-        self.ntn_layer = NeuralTensorNetwork(self.input_dim, slices = self.ntn_slices, activation = self.activation)
+        self.ntn_layer = NeuralTensorNetwork(self.filters[-1], slices = self.ntn_slices, activation = self.activation)
         
         # MLP layer
         if self.include_histogram:

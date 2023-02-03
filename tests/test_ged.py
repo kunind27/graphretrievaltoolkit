@@ -1,8 +1,10 @@
 import sys
 import os
+import os.path as osp
+import random
+import numpy as np
 
 from torch_geometric.typing import NoneType
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), os.pardir)))
 
 from sgmatch.models.SimGNN import SimGNN
 from torch_geometric.datasets import GEDDataset
@@ -10,15 +12,12 @@ from torch_geometric.utils import degree
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 from torch_geometric.transforms import OneHotDegree
+from torch.functional import Tensor
 import torch
-import os.path as osp
-import random
-import numpy as np
 
 random.seed(0)
 np.random.seed(1)
 
-Tensor = torch.Tensor
 DATASET_NAME = 'LINUX'
 TRAIN_BATCH_SIZE = 128
 TEST_BATCH_SIZE = 256

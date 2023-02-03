@@ -82,16 +82,15 @@ class MLPEncoder(torch.nn.Module):
         if edge_features is not None:
             for layer_idx, lin in enumerate(self.mlp_edge):
                 edge_features = lin(edge_features)
-                edge_features = torch.nn.functional.relu(edge_features) if layer_idx != len(self.mlp_edge) - 1 else edge_features
+                edge_features = torch.relu(edge_features) if layer_idx != len(self.mlp_edge) - 1 else edge_features
     
             return node_features, edge_features
         return node_features
 
     def __repr__(self):
-        return ('{}(node_feature_dim={}, edge_feature_dim={}, node_hidden_sizes={}, \
-                    edge_hidden_sizes={})').format(self.__class__.__name__, self.node_feature_dim,
-                                                   self.edge_feature_dim, self.node_hidden_sizes,  
-                                                   self.edge_hidden_sizes)
+        return ("{}(node_hidden_sizes={}, edge_hidden_sizes={})").format(self.__class__.__name__, 
+                                                                        self.node_hidden_sizes,  
+                                                                        self.edge_hidden_sizes)
 
 class OrderEmbedder(torch.nn.Module):
     r"""

@@ -101,7 +101,7 @@ class GMNMatch(torch.nn.Module):
                 message_net_init_scale: float = 0.1, node_update_type: str = 'residual', 
                 use_reverse_direction: bool = True, reverse_dir_param_different: bool = True, 
                 attention_sim_metric: str = "euclidean", layer_norm: bool = False):
-        super(GMNEmbed, self).__init__()
+        super(GMNMatch, self).__init__()
         self.node_feature_dim = node_feature_dim
         self.edge_feature_dim = edge_feature_dim
 
@@ -130,8 +130,8 @@ class GMNMatch(torch.nn.Module):
         self.reset_parameters()
 
     def setup_layers(self):
-        self._encoder = MLPEncoder(self.node_feature_dim, self.node_hidden_sizes, edge_feature_dim=self.edge_feature_dim, 
-                            edge_hidden_sizes=self.edge_hidden_sizes)
+        self._encoder = MLPEncoder(self.node_feature_dim, self.enc_node_layers, edge_feature_dim=self.edge_feature_dim, 
+                            edge_hidden_sizes=self.enc_edge_layers)
         self._attention = CrossGraphAttention(similarity_metric=self.attention_sim_metric)
         self._propagator = GraphProp(self.node_feature_dim, self.prop_node_layers, self.prop_message_layers, 
                                edge_feature_dim=self.edge_feature_dim, message_net_init_scale=self.message_net_init_scale,
