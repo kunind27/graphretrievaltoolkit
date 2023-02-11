@@ -8,7 +8,7 @@ import torch.nn.functional
 from torch_geometric.nn.conv import GCNConv, SAGEConv, GATConv
 
 from ..modules.attention import GlobalContextAttention
-from ..modules.ntn import NeuralTensorNetwork
+from ..modules.scoring import NeuralTensorNetwork
 from ..utils.utility import setup_linear_nn, setup_conv_layers
 
 class SimGNN(torch.nn.Module):
