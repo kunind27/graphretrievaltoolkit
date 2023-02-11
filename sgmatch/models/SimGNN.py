@@ -1,4 +1,5 @@
-from typing import Optional, List
+from typing import Optional, List, Type
+from sgmatch.utils.utility import Namespace
 
 import torch
 from torch.functional import Tensor
@@ -42,21 +43,21 @@ class SimGNN(torch.nn.Module):
         include_histogram (bool): Flag for including Strategy Two: Nodewise comparison
             from SimGNN. (default: :obj:`True`)
     """
-    def __init__(self, input_dim: int, ntn_slices: int = 16, filters: list = [64, 32, 16],
+    def __init__(self, av: Type[Namespace], input_dim: int, ntn_slices: int = 16, filters: list = [64, 32, 16],
                  mlp_neurons: List[int] = [32,16,8,4], hist_bins: int = 16, conv: str = "GCN", 
                  activation: str = "tanh", activation_slope: Optional[float] = None, 
                  include_histogram: bool = True):
         # TODO: give a better name to the include_histogram flag 
         super(SimGNN, self).__init__()
-        self.input_dim = input_dim
-        self.ntn_slices = ntn_slices
-        self.filters = filters
-        self.mlp_neurons = mlp_neurons
-        self.hist_bins = hist_bins
-        self.conv_type = conv
-        self.activation = activation
-        self.activation_slope = activation_slope
-        self.include_histogram = include_histogram
+        self.input_dim = av.input_dim
+        self.ntn_slices = av.ntn_slices
+        self.filters = av.filters
+        self.mlp_neurons = av.mlp_neurons
+        self.hist_bins = av.hist_bins
+        self.conv_type = av.conv
+        self.activation = av.activation
+        self.activation_slope = av.activation_slope
+        self.include_histogram = av.include_histogram
 
         self.setup_layers()
         self.reset_parameters()

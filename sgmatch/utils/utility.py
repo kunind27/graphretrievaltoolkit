@@ -5,6 +5,49 @@ import torch
 from .constants import CONVS, ACTIVATION_LAYERS
 # from torch import cuda
 
+class Namespace():
+    def __init__(self, **kwargs):
+        self.update_default_arguments()
+        self.__dict__.update(kwargs)
+
+    def update_default_args(self):
+        self.update_simgnn_default_args()
+        self.update_gmn_default_args()
+        self.update_graphsim_default_args()
+        self.update_isonet_default_args()
+        self.update_neuromatch_default_args()
+
+    def update_simgnn_default_args(self):
+        self.__dict__.update(ntn_slices        = 16,
+                             filters           = [64, 32, 16],
+                             mlp_neurons       = [32,16,8,4],
+                             hist_bins         = 16,
+                             conv              = 'GCN',
+                             activation        = 'tanh',
+                             activation_slope  = None,
+                             include_histogram = True)
+
+    def update_gmn_default_args(self):
+        self.__dict__.update(edge_feature_dim            = None,
+                             enc_edge_hidden_sizes       = None,
+                             message_net_init_scale      = 0.1,
+                             node_update_type            = 'residual',
+                             use_reverse_direction       = True,
+                             reverse_dir_param_different = True,
+                             attention_sim_metric        = 'euclidean',
+                             layer_norm                  = False)
+
+    def update_graphsim_default_args(self):
+        pass
+
+    def update_isonet_default_args(self):
+        pass
+
+    def update_neuromatch_default_args(self):
+        self.__dict__.update(conv_type = 'SAGEConv',
+                             dropout   = 0.0,
+                             skip      = 'learnable')
+
 def setup_linear_nn(input_dim: int, hidden_sizes: List[int]):
     r"""
     """

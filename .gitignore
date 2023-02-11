@@ -8,8 +8,9 @@ __pycache__/
 # C extensions
 *.so
 
-# Testing IPython Notebook
+# Code Files to Ignore
 test.ipynb
+sgmatch/models/GraphSim.py
 
 # Distribution / packaging
 .Python

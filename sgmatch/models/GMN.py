@@ -1,4 +1,5 @@
-from typing import Optional, List
+from typing import Optional, List, Type
+from sgmatch.utils.utility import Namespace
 
 import torch
 from torch_geometric.nn.aggr.attention import AttentionalAggregation
@@ -11,38 +12,75 @@ from ..modules.attention import CrossGraphAttention
 from ..utils.utility import setup_linear_nn, setup_LRL_nn
 
 class GMNEmbed(torch.nn.Module):
-    r"""
+     r"""
+    End to end implementation of Graph Matching Networks - Embed from the `"Graph Matching Networks for Learning the Similarity
+    of Graph Structured Objects" <https://arxiv.org/abs/1904.12787>`_ paper.
+    
+    TODO: Provide description of implementation and differences from paper if any
+
+    Args:
+        node_feature_dim (int): Input dimension of node feature embedding vectors
+        enc_node_hidden_sizes ([int]): Hyperparameter for the number of tensor slices in the
+            Neural Tensor Network. In this domain, it denotes the number of interaction 
+            (similarity) scores produced by the model for each graph embedding pair.
+        prop_node_hidden_sizes ([int]): Number of filters per convolutional layer in the graph 
+            convolutional encoder model.
+        prop_message_hidden_sizes ([int]): Number of hidden neurons in each linear layer of 
+            MLP for reducing dimensionality of concatenated output of neural 
+            tensor network and histogram features. Note that the final scoring 
+            weight tensor of size :obj:`[mlp_neurons[-1], 1]` is kept separate
+            from the MLP, therefore specifying only the hidden layer sizes will
+            suffice.
+        aggr_gate_hidden_sizes ([int]): Hyperparameter controlling the number of bins in the node 
+            ordering histogram scheme.
+        aggr_mlp_hidden_sizes ([int]): Type of graph convolutional architecture to be used for encoding
+            (:obj:`'GCN'` or :obj:`'SAGE'` or :obj:`'GAT'`)
+        edge_feature_dim (int, Optional): Type of activation used in Attention and NTN modules. 
+            (:obj:`'sigmoid'` or :obj:`'relu'` or :obj:`'leaky_relu'` or :obj:`'tanh'`) 
+            (default: :obj:`None`)
+        enc_edge_hidden_sizes ([int], Optional): Slope of function for leaky_relu activation. 
+            (default: :obj:`None`)
+        message_net_init_scale (float): Flag for including Strategy Two: Nodewise comparison
+            from SimGNN. (default: :obj:`0.1`)
+        node_update_type (str): Slope of function for leaky_relu activation. 
+            (default: :obj:`'residual'`)
+        use_reverse_direction (bool): Slope of function for leaky_relu activation. 
+            (default: :obj:`True`)
+        reverse_dir_param_different (bool): Slope of function for leaky_relu activation. 
+            (default: :obj:`True`)
+        layer_norm (bool): Slope of function for leaky_relu activation. 
+            (default: :obj:`True`)
     """
     # TODO: Provide default arguments for MLP layer sizes
-    def __init__(self, node_feature_dim: int, enc_node_hidden_sizes: List[int], 
+    def __init__(self, av: Type[Namespace], node_feature_dim: int, enc_node_hidden_sizes: List[int], 
                 prop_node_hidden_sizes: List[int], prop_message_hidden_sizes: List[int],
-                aggr_gate_hidden_sizes: List[int], aggr_mlp_hidden_sizes: List[int], 
+                aggr_gate_hidden_sizes: List[int], aggr_mlp_hidden_sizes: List[int],
                 edge_feature_dim: Optional[int] = None, enc_edge_hidden_sizes: Optional[List[int]] = None,
                 message_net_init_scale: float = 0.1, node_update_type: str = 'residual', 
                 use_reverse_direction: bool = True, reverse_dir_param_different: bool = True, 
                 layer_norm: bool = False):
         super(GMNEmbed, self).__init__()
-        self.node_feature_dim = node_feature_dim
-        self.edge_feature_dim = edge_feature_dim
+        self.node_feature_dim = av.node_feature_dim
+        self.edge_feature_dim = av.edge_feature_dim
 
         # Encoder Module        
-        self.enc_node_layers = enc_node_hidden_sizes
-        self.enc_edge_layers = enc_edge_hidden_sizes
+        self.enc_node_layers = av.enc_node_hidden_sizes
+        self.enc_edge_layers = av.enc_edge_hidden_sizes
         
         # Propagation Module
-        self.prop_node_layers = prop_node_hidden_sizes
-        self.prop_message_layers = prop_message_hidden_sizes
+        self.prop_node_layers = av.prop_node_hidden_sizes
+        self.prop_message_layers = av.prop_message_hidden_sizes
         
         # Aggregation Module
-        self.aggr_gate_layers = aggr_gate_hidden_sizes
-        self.aggr_mlp_layers = aggr_mlp_hidden_sizes
+        self.aggr_gate_layers = av.aggr_gate_hidden_sizes
+        self.aggr_mlp_layers = av.aggr_mlp_hidden_sizes
 
-        self.message_net_init_scale = message_net_init_scale # Unused
-        self.node_update_type = node_update_type
-        self.use_reverse_direction = use_reverse_direction
-        self.reverse_dir_param_different = reverse_dir_param_different
+        self.message_net_init_scale = av.message_net_init_scale # Unused
+        self.node_update_type = av.node_update_type
+        self.use_reverse_direction = av.use_reverse_direction
+        self.reverse_dir_param_different = av.reverse_dir_param_different
 
-        self.layer_norm = layer_norm
+        self.layer_norm = av.layer_norm
         self.prop_type = "embedding"
 
         # TODO: Include assertion method to ensure correct dimensionality for mlp outputs
@@ -92,38 +130,77 @@ class GMNEmbed(torch.nn.Module):
 
 class GMNMatch(torch.nn.Module):
     r"""
+    End to end implementation of Graph Matching Networks - Match from the `"Graph Matching Networks for Learning the Similarity
+    of Graph Structured Objects" <https://arxiv.org/abs/1904.12787>`_ paper.
+    
+    TODO: Provide description of implementation and differences from paper if any
+
+    Args:
+        node_feature_dim (int): Input dimension of node feature embedding vectors
+        enc_node_hidden_sizes ([int]): Hyperparameter for the number of tensor slices in the
+            Neural Tensor Network. In this domain, it denotes the number of interaction 
+            (similarity) scores produced by the model for each graph embedding pair.
+        prop_node_hidden_sizes ([int]): Number of filters per convolutional layer in the graph 
+            convolutional encoder model.
+        prop_message_hidden_sizes ([int]): Number of hidden neurons in each linear layer of 
+            MLP for reducing dimensionality of concatenated output of neural 
+            tensor network and histogram features. Note that the final scoring 
+            weight tensor of size :obj:`[mlp_neurons[-1], 1]` is kept separate
+            from the MLP, therefore specifying only the hidden layer sizes will
+            suffice.
+        aggr_gate_hidden_sizes ([int]): Hyperparameter controlling the number of bins in the node 
+            ordering histogram scheme.
+        aggr_mlp_hidden_sizes ([int]): Type of graph convolutional architecture to be used for encoding
+            (:obj:`'GCN'` or :obj:`'SAGE'` or :obj:`'GAT'`)
+        edge_feature_dim (int, Optional): Type of activation used in Attention and NTN modules. 
+            (:obj:`'sigmoid'` or :obj:`'relu'` or :obj:`'leaky_relu'` or :obj:`'tanh'`) 
+            (default: :obj:`None`)
+        enc_edge_hidden_sizes ([int], Optional): Slope of function for leaky_relu activation. 
+            (default: :obj:`None`)
+        message_net_init_scale (float): Flag for including Strategy Two: Nodewise comparison
+            from SimGNN. (default: :obj:`0.1`)
+        node_update_type (str): Slope of function for leaky_relu activation. 
+            (default: :obj:`'residual'`)
+        use_reverse_direction (bool): Slope of function for leaky_relu activation. 
+            (default: :obj:`True`)
+        reverse_dir_param_different (bool): Slope of function for leaky_relu activation. 
+            (default: :obj:`True`)
+        attention_sim_metric (str): Slope of function for leaky_relu activation. 
+            (default: :obj:`'euclidean'`) 
+        layer_norm (bool): Slope of function for leaky_relu activation. 
+            (default: :obj:`True`)
     """
     # TODO: Provide default arguments for MLP layer sizes
-    def __init__(self, node_feature_dim: int, enc_node_hidden_sizes: List[int], 
+    def __init__(self, av: Type[Namespace], node_feature_dim: int, enc_node_hidden_sizes: List[int], 
                 prop_node_hidden_sizes: List[int], prop_message_hidden_sizes: List[int],
-                aggr_gate_hidden_sizes: List[int], aggr_mlp_hidden_sizes: List[int], 
+                aggr_gate_hidden_sizes: List[int], aggr_mlp_hidden_sizes: List[int],
                 edge_feature_dim: Optional[int] = None, enc_edge_hidden_sizes: Optional[List[int]] = None,
                 message_net_init_scale: float = 0.1, node_update_type: str = 'residual', 
                 use_reverse_direction: bool = True, reverse_dir_param_different: bool = True, 
                 attention_sim_metric: str = "euclidean", layer_norm: bool = False):
         super(GMNMatch, self).__init__()
-        self.node_feature_dim = node_feature_dim
-        self.edge_feature_dim = edge_feature_dim
+        self.node_feature_dim = av.node_feature_dim
+        self.edge_feature_dim = av.edge_feature_dim
 
         # Encoder Module        
-        self.enc_node_layers = enc_node_hidden_sizes
-        self.enc_edge_layers = enc_edge_hidden_sizes
+        self.enc_node_layers = av.enc_node_hidden_sizes
+        self.enc_edge_layers = av.enc_edge_hidden_sizes
         
         # Propagation Module
-        self.prop_node_layers = prop_node_hidden_sizes
-        self.prop_message_layers = prop_message_hidden_sizes
+        self.prop_node_layers = av.prop_node_hidden_sizes
+        self.prop_message_layers = av.prop_message_hidden_sizes
         
         # Aggregation Module
-        self.aggr_gate_layers = aggr_gate_hidden_sizes + [node_feature_dim]
-        self.aggr_mlp_layers = aggr_mlp_hidden_sizes + [node_feature_dim]
+        self.aggr_gate_layers = av.aggr_gate_hidden_sizes + [av.node_feature_dim]
+        self.aggr_mlp_layers = av.aggr_mlp_hidden_sizes + [av.node_feature_dim]
 
-        self.message_net_init_scale = message_net_init_scale # Unused
-        self.node_update_type = node_update_type
-        self.use_reverse_direction = use_reverse_direction
-        self.reverse_dir_param_different = reverse_dir_param_different
+        self.message_net_init_scale = av.message_net_init_scale # Unused
+        self.node_update_type = av.node_update_type
+        self.use_reverse_direction = av.use_reverse_direction
+        self.reverse_dir_param_different = av.reverse_dir_param_different
 
-        self.attention_sim_metric = attention_sim_metric
-        self.layer_norm = layer_norm
+        self.attention_sim_metric = av.attention_sim_metric
+        self.layer_norm = av.layer_norm
         self.prop_type = "matching"
         
         self.setup_layers()

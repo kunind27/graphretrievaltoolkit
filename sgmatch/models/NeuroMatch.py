@@ -1,4 +1,5 @@
-from typing import Optional, List
+from typing import Optional, List, Type
+from sgmatch.utils.utility import Namespace
 
 import torch
 import torch_geometric.nn as pyg_nn
@@ -10,17 +11,17 @@ from utils.constants import CONVS
 class SkipLastGNN(torch.nn.Module):
     r"""
     """
-    def __init__(self, input_dim: int, hidden_dim: int, output_dim: int, 
+    def __init__(self, av: Type[Namespace], input_dim: int, hidden_dim: int, output_dim: int, 
                 num_layers: int, conv_type: str = "SAGEConv", dropout: float = 0.0,
                 skip: str = "learnable"):
         super(SkipLastGNN, self).__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
-        self.num_layers = num_layers
-        self.conv_type = conv_type
-        self.dropout = dropout
-        self.skip = skip
+        self.input_dim = av.input_dim
+        self.hidden_dim = av.hidden_dim
+        self.output_dim = av.output_dim
+        self.num_layers = av.num_layers
+        self.conv_type = av.conv_type
+        self.dropout = av.dropout
+        self.skip = av.skip
 
         # XXX: Does feature preprocessing need to be moved elsewhere and 
         # XXX: even included in the library
