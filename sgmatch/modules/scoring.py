@@ -64,6 +64,7 @@ class NeuralTensorNetwork(torch.nn.Module):
 
 def similarity(h_i, h_j, mode:str = "cosine"):
     # BUG: similarity may not return the correct product
+    # BUG: cosine returns 0-1 normalised similarity and others return unnormalized distance
     if mode == "cosine":
         return torch.nn.functional.cosine_similarity(h_i, h_j, dim=-1)
     if mode == "euclidean":
@@ -72,3 +73,6 @@ def similarity(h_i, h_j, mode:str = "cosine"):
         return torch.cdist(h_i, h_j, p=1)
     if mode == "hamming":
         return torch.cdist(h_i, h_j, p=0)
+    if mode == "hinge":
+        prod = 1 - torch.matmmul(h_i, h_j)
+        return torch.max(torch.zeros(prod.shape), prod)
