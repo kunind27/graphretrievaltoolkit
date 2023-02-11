@@ -1,5 +1,4 @@
 from typing import Optional, List, Type
-from sgmatch.utils.utility import Namespace
 
 import torch
 from torch.functional import Tensor
@@ -9,7 +8,7 @@ from torch_geometric.nn.conv import GCNConv, SAGEConv, GATConv
 
 from ..modules.attention import GlobalContextAttention
 from ..modules.scoring import NeuralTensorNetwork
-from ..utils.utility import setup_linear_nn, setup_conv_layers
+from ..utils.utility import setup_linear_nn, setup_conv_layers, Namespace
 
 class SimGNN(torch.nn.Module):
     r"""
