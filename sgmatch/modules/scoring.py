@@ -61,3 +61,14 @@ class NeuralTensorNetwork(torch.nn.Module):
         scores = _activation(scores)
 
         return scores
+
+def similarity(h_i, h_j, mode:str = "cosine"):
+    # BUG: similarity may not return the correct product
+    if mode == "cosine":
+        return torch.nn.functional.cosine_similarity(h_i, h_j, dim=-1)
+    if mode == "euclidean":
+        return torch.cdist(h_i, h_j, p=2)
+    if mode == "manhattan":
+        return torch.cdist(h_i, h_j, p=1)
+    if mode == "hamming":
+        return torch.cdist(h_i, h_j, p=0)
